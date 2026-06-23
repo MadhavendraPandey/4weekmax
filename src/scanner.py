@@ -118,17 +118,66 @@ class AssetScanner:
             logger.error(f"Enumeration failed: {e}")
             raise
 
-    def export_json(self, filepath: str) -> None:
+    def scan_ports(self, hosts: list = None, ports: list = None) -> Dict[str, list]:
         """
-        Export results to JSON file.
+        Scan common ports on discovered subdomains.
 
         Args:
-            filepath: Output JSON file path
+            hosts: List of hosts to scan (default: subdomains)
+            ports: List of ports to check (default: common ports)
+
+        Returns:
+            Dict of {host: [open_ports]}
         """
+        if not hosts:
+            hosts = self.subdomains[:5]  # Scan first 5 to avoid rate limits
+
+        if not ports:
+            ports = [80, 443, 8080, 8443, 22, 21, 25, 3306, 5432]
+
+        results = {}
+
+        try:
+            import socket
+
+            for host in hosts:
+                open_ports = []
+                logger.info(f"Scanning {host}")
+
+                for port in ports:
+                    try:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(2)
+                        result = sock.connect_ex((host, port))
+
+                        if result == 0:
+                            open_ports.append(port)
+                            logger.info(f"  Port {port} OPEN")
+
+                        sock.close()
+                    except socket.gaierror:
+                        logger.warning(f"  Hostname {host} could not be resolved")
+                        break
+                    except socket.error:
+                        pass
+
+                results[host] = open_ports
+
+            self.results = results
+            logger.info(f"Port scan complete: {len(results)} hosts scanned")
+            return results
+
+        except Exception as e:
+            logger.error(f"Port scan failed: {e}")
+            raise
+
+    def export_json(self, filepath: str) -> None:
+        """Export results to JSON file."""
         output = {
             "domain": self.domain,
             "subdomains": self.subdomains,
-            "total": len(self.subdomains),
+            "total_subdomains": len(self.subdomains),
+            "ports": self.results,
         }
 
         with open(filepath, "w") as f:
@@ -159,8 +208,3 @@ def main(domain: str, output_file: str = "results.json") -> None:
     except Exception as e:
         logger.error(f"Scan failed: {e}")
         raise
-
-
-if __name__ == "__main__":
-    # Test
-    main("google.com")

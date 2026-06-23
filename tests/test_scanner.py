@@ -72,3 +72,12 @@ class TestAssetScanner:
         assert data["domain"] == "example.com"
         assert len(data["subdomains"]) == 2
         assert data["total"] == 2
+
+
+def test_scan_ports_mock(self):
+    """Test port scanning"""
+    scanner = AssetScanner("example.com")
+    results = scanner.scan_ports(hosts=["google.com"], ports=[80, 443])
+
+    assert isinstance(results, dict)
+    assert "google.com" in results
